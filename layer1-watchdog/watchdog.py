@@ -251,7 +251,7 @@ def check_process_alive():
 
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "openclaw gateway"],
+            ["pgrep", "-f", "openclaw[- ]gateway"],
             timeout=2,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
