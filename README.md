@@ -5,7 +5,7 @@
 ---
 
 <a id="english"></a>
-## 🇬🇧 English
+## English
 
 Production-ready self-healing and monitoring for OpenClaw deployments.
 
@@ -107,7 +107,7 @@ Apache-2.0
 ---
 
 <a id="chinese"></a>
-## 🇨🇳 中文 / Chinese
+## 中文 / Chinese
 
 OpenClaw 生产级自愈与监控系统。
 
