@@ -11,6 +11,7 @@ import datetime
 import os
 import json
 import shutil
+import glob
 import fcntl
 import errno
 import socket
@@ -19,7 +20,34 @@ import base64
 # Configuration
 # Configuration - Use expanduser for cross-system compatibility
 HOME = os.path.expanduser("~")
-OPENCLAW_BIN = os.path.join(HOME, ".npm-global", "bin", "openclaw")
+
+def _resolve_openclaw_bin():
+    # 1) Explicit override
+    override = os.environ.get("OPENCLAW_BIN", "").strip()
+    if override and os.path.exists(override):
+        return override
+
+    # 2) PATH lookup (works in interactive shells, sometimes not in launchd)
+    which = shutil.which("openclaw")
+    if which:
+        return which
+
+    # 3) NVM installs (common on macOS dev machines)
+    candidates = glob.glob(os.path.join(HOME, ".nvm", "versions", "node", "*", "bin", "openclaw"))
+    if candidates:
+        # Pick the newest by mtime (good enough; avoids parsing semver).
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
+
+    # 4) Common global install locations
+    for p in ["/opt/homebrew/bin/openclaw", "/usr/local/bin/openclaw"]:
+        if os.path.exists(p):
+            return p
+
+    return None
+
+
+OPENCLAW_BIN = _resolve_openclaw_bin()
 GUARDIAN_DIR = os.path.join(HOME, ".openclaw", "guardian")
 LOG_FILE = os.path.join(GUARDIAN_DIR, "watchdog.log")
 STATE_FILE = os.path.join(GUARDIAN_DIR, "watchdog.state")
@@ -32,13 +60,18 @@ MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 ROLLING_BACKUP_COUNT = 3
 
 # Ensure PATH includes node location
-ENV_SETUP = "export PATH=$PATH:/usr/local/bin:/opt/homebrew/bin; "
+_extra_paths = ["/usr/local/bin", "/opt/homebrew/bin"]
+if OPENCLAW_BIN:
+    _extra_paths.insert(0, os.path.dirname(OPENCLAW_BIN))
+ENV_SETUP = "export PATH=$PATH:" + ":".join(_extra_paths) + "; "
 
 
 def write_audit_event(event_type, status, details=None):
     """Write structured audit event for system-watchdog to consume."""
+    # Use UTC with timezone info for reliable correlation.
+    now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     event = {
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": now_utc,
         "type": event_type,
         "status": status,
         "details": details or {}
@@ -119,6 +152,8 @@ def notify(message, level="info"):
     
     # Strategy 1: Try openclaw CLI
     try:
+        if not OPENCLAW_BIN:
+            raise RuntimeError("openclaw CLI not found")
         cmd = f'{OPENCLAW_BIN} message send --target "1467890964843597988" --message "{full_msg}"'
         result = run_command(cmd, timeout=10)
         if result and result.returncode == 0:
@@ -412,6 +447,11 @@ def classify_failure(stderr, returncode):
 
 def check_health_spawn():
     """Probe Gateway health via sessions spawn."""
+    if not OPENCLAW_BIN:
+        log("⛔ FATAL: openclaw CLI not found (cannot probe gateway).")
+        write_audit_event("watchdog_error", "fatal", {"reason": "CLI_NOT_FOUND"})
+        return False, "CLI_NOT_FOUND", "openclaw CLI not found"
+
     cmd = f'{OPENCLAW_BIN} sessions spawn --task "Say OK" --agentId main --timeoutSeconds 25'
     
     start_t = time.time()
@@ -425,8 +465,9 @@ def check_health_spawn():
     failure_type, failure_msg = classify_failure(result.stderr, result.returncode)
     
     if failure_type == "CLI_NOT_FOUND":
-        log(f"{failure_msg}. Aborting watchdog.")
-        sys.exit(1)
+        log(f"{failure_msg}. Watchdog cannot act without CLI.")
+        write_audit_event("watchdog_error", "fatal", {"reason": "CLI_NOT_FOUND"})
+        return False, failure_type, failure_msg
     
     if result.returncode == 0:
         verified, fail_type, fail_msg = verify_gateway_health()

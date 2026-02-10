@@ -1,42 +1,21 @@
 # OpenClaw Guardian Configuration
-# Copy this file to ~/.openclaw/guardian.yaml and customize
 
 watchdog:
-  # Health probe intervals
-  day_interval_minutes: 15      # 08:00-23:00 (Daytime)
-  night_interval_minutes: 60    # 00:00-07:00 (Night)
-  
-  # Safety limits
-  max_consecutive_restarts: 3   # Give up after 3 failed restarts
-  
-  # Log management
-  log_rotation_mb: 10           # Rotate logs when they exceed 10MB
-  
-  # Backup strategy
-  backup_count: 4               # Keep current + 3 historical versions
+  day_interval_minutes: 15      # 08:00-23:00
+  night_interval_minutes: 60    # 00:00-07:00
+  max_consecutive_restarts: 3
+  log_rotation_mb: 10
+  backup_count: 4
 
 audit:
-  # Reporting frequency
-  report_interval_hours: 2      # Generate reports every 2 hours (daytime)
-  
-  # Data collection
-  log_read_size_kb: 512         # Read last 512KB of each log file
-  history_window_hours: 2       # Analyze last 2 hours of logs
+  report_interval_hours: 2
+  log_read_size_kb: 512
+  history_window_hours: 2
 
 security:
-  # Tinman integration (requires tinman skill)
-  tinman_enabled: false         # Set to true if tinman is installed
-  daily_scan_time: "09:15"      # Time for daily security scan
+  tinman_enabled: false
+  daily_scan_time: "09:15"
 
 notification:
-  # Primary notification channel
   discord_channel: "#the-beacon"
-  
-  # Fallback when Discord unavailable
-  fallback: "macos_notification"  # Options: macos_notification, none
-
-# Advanced settings (usually don't need to change)
-advanced:
-  probe_timeout_seconds: 30
-  restart_verify_wait_seconds: 30
-  pid_file_timeout_seconds: 300
+  fallback: "macos_notification"
